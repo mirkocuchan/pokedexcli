@@ -57,6 +57,14 @@ func (c *Cache) reapLoop(interval time.Duration) {
 
 }
 
-func newCache(){
-	aca va a estar reapLoop()
+func newCache() (Cache){
+	c := Cache{
+    	cache: map[string]cacheEntry{},
+	}
+	//o c.cache := make(map[string]cacheEntry)
+	const interval = 5 * time.Second
+
+	go c.reapLoop(interval)
+
+	return c
 }
