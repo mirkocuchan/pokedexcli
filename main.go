@@ -16,19 +16,19 @@ import (
 type cliCommand struct {
 	name        string
 	description string
-	callback    func(*config) error
+	callback    func(*config, []string) error
 }
 type config struct{
 	Next *string
 	Previous *string
 }
-func commandExit(cfg *config) error{
+func commandExit(cfg *config, args []string) error{
 	fmt.Println("Closing the Pokedex... Goodbye!")
 	os.Exit(0)
 	return nil
 }
 
-func commandHelp(cfg *config) error{
+func commandHelp(cfg *config, args []string) error{
 	fmt.Println()
 	fmt.Println("Welcome to the Pokedex!")
 	fmt.Println("Usage:")
@@ -53,7 +53,7 @@ type LocationArea struct {
 var url = "https://pokeapi.co/api/v2/location-area/"
 var cache = pokecache.NewCache(5 * time.Second)
 
-func commandMap(cfg *config) (error){
+func commandMap(cfg *config, args []string) (error){
 	currentURL := url
 
 	if cfg.Next != nil {
@@ -96,7 +96,7 @@ func commandMap(cfg *config) (error){
     return nil
 }
 
-func commandMapb(cfg *config) (error){
+func commandMapb(cfg *config, args []string) (error){
 
 	currentURL := url
 	if cfg.Previous == nil{
@@ -141,6 +141,53 @@ func commandMapb(cfg *config) (error){
 	return nil 
 }
 
+type LocationAreaDetail struct {
+    PokemonEncounters []struct {
+        Pokemon struct {
+            Name string `json:"name"`
+            URL  string `json:"url"`
+        } `json:"pokemon"`
+    } `json:"pokemon_encounters"`
+}
+
+func commandExplore(cfg *config, args []string) error{
+	name := args[0]
+	url := "https://pokeapi.co/api/v2/location-area/" + name + "/"
+	var body []byte
+	var err error
+
+    data, ok := cache.Get(url)
+	if ok{
+		body = data
+	}else{
+		res, err := http.Get(url)
+
+		if err != nil {
+            return err
+        }
+        defer res.Body.Close()
+
+		body, err = io.ReadAll(res.Body)
+        if err != nil {
+            return err
+        }
+
+        cache.Add(url, body)
+	}
+
+	var str LocationAreaDetail 
+	
+	err = json.Unmarshal(body, &str)
+	if err != nil {
+		return err
+	}
+	for _, pokemon := range str.PokemonEncounters {
+    	fmt.Println(pokemon.Pokemon.Name)
+	}
+    
+	return nil 
+}
+
 func cleanInput(text string) []string{
     output := strings.ToLower(text)
     return strings.Fields(output)
@@ -168,6 +215,11 @@ func getCommands() map[string]cliCommand {
 			description: "Previous 20 location areas",
 			callback:    commandMapb,
 		},
+		"explore": {
+			name:        "explore",
+			description: "List of Pokemon in the area",
+			callback:    commandExplore,
+		},
 	}
 }
 
@@ -175,6 +227,7 @@ func main(){
 	reader := bufio.NewScanner(os.Stdin)
 	commands := getCommands()
 	cfg := &config{}
+	args := []string{}
 	for{
 		fmt.Print("Pokedex > ")
 		if !reader.Scan() {
@@ -192,8 +245,9 @@ func main(){
 			fmt.Println("Unknown command")
 			continue
 		}
+		if cmd == 
 
-		if err := cmd.callback(cfg); err != nil {
+		if err := cmd.callback(cfg, args); err != nil {
 			fmt.Println(err)
 		}
 		
