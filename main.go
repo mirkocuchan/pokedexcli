@@ -5,10 +5,12 @@ import (
 	"os"
 	"strings"
 	"fmt"
-	"log"
 	"net/http"
 	"io"
 	"encoding/json"
+	"errors"
+	"github.com/mirkocuchan/pokedexcli/internal/pokecache"
+	"time"
 )
 
 type cliCommand struct {
@@ -49,38 +51,92 @@ type LocationArea struct {
 }
 
 var url = "https://pokeapi.co/api/v2/location-area/"
-func commandMap(cfg *config) (error){
-	var res *http.Response
-	var err error
-	if cfg.Next == nil{
-		res, err = http.Get(url)
-		
-	}else{
-		res, err = http.Get(*cfg.Next)
-		
-	}
-	if err != nil{
-		log.Fatal(err)
-	}
-	defer res.Body.Close()
+var cache = pokecache.NewCache(5 * time.Second)
 
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		log.Fatal(err)
+func commandMap(cfg *config) (error){
+	currentURL := url
+
+	if cfg.Next != nil {
+    	currentURL = *cfg.Next
 	}
+	
+	var body []byte
+    data, ok := cache.Get(currentURL)
+
+    if ok {
+        body = data
+    } else {
+        res, err := http.Get(currentURL)
+        if err != nil {
+            return err
+        }
+        defer res.Body.Close()
+
+        body, err = io.ReadAll(res.Body)
+        if err != nil {
+            return err
+        }
+
+        cache.Add(currentURL, body)
+    }
+
+    var str LocationArea
+    err := json.Unmarshal(body, &str)
+    if err != nil {
+        return err
+    }
+
+    for _, loc := range str.Results {
+        fmt.Println(loc.Name)
+    }
+
+    cfg.Next = str.Next
+    cfg.Previous = str.Previous
+
+    return nil
+}
+
+func commandMapb(cfg *config) (error){
+
+	currentURL := url
+	if cfg.Previous == nil{
+		return errors.New("you're on the first page")
+	}
+	currentURL = *cfg.Previous
+	
+	
+	var err error
+	var body []byte
+    data, ok := cache.Get(currentURL)
+
+	if ok{
+		body = data
+	}else{
+		res, err := http.Get(currentURL)
+        if err != nil {
+            return err
+        }
+        defer res.Body.Close()
+
+        body, err = io.ReadAll(res.Body)
+        if err != nil {
+            return err
+        }
+
+        cache.Add(currentURL, body)
+	}	
 	
 	var str LocationArea 
 	
 	err = json.Unmarshal(body, &str)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	for _, loc := range str.Results {
     	fmt.Println(loc.Name)
 	}
-	if str.Next != nil {
-    	cfg.Next = str.Next
-	}
+    cfg.Next = str.Next
+
 	cfg.Previous = str.Previous	
 	return nil 
 }
@@ -104,8 +160,13 @@ func getCommands() map[string]cliCommand {
 		},
 		"map": {
 			name:        "map",
-			description: "Next or previous 20 location areas",
+			description: "Next 20 location areas",
 			callback:    commandMap,
+		},
+		"mapb": {
+			name:        "mapb",
+			description: "Previous 20 location areas",
+			callback:    commandMapb,
 		},
 	}
 }

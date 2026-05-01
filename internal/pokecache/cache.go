@@ -1,5 +1,8 @@
+package pokecache
+
 import(
 	"sync"
+	"time"
 )
 
 
@@ -57,12 +60,11 @@ func (c *Cache) reapLoop(interval time.Duration) {
 
 }
 
-func newCache() (Cache){
+func NewCache(interval time.Duration) (Cache){
 	c := Cache{
     	cache: map[string]cacheEntry{},
 	}
 	//o c.cache := make(map[string]cacheEntry)
-	const interval = 5 * time.Second
 
 	go c.reapLoop(interval)
 
